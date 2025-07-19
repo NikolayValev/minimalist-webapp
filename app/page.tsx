@@ -29,6 +29,23 @@ export default function Home() {
   const [loadingCollections, setLoadingCollections] = useState(true)
   const supabase = getSupabaseClient()
 
+  // Add this after the existing state declarations
+  const [authError, setAuthError] = useState<string | null>(null)
+
+  // Add this useEffect after the existing useEffect
+  useEffect(() => {
+    // Check for auth errors in URL
+    const urlParams = new URLSearchParams(window.location.search)
+    const error = urlParams.get("error")
+    const message = urlParams.get("message")
+
+    if (error) {
+      setAuthError(message || error)
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+  }, [])
+
   useEffect(() => {
     if (user) {
       fetchCollections()
@@ -71,6 +88,20 @@ export default function Home() {
         <Header />
         <div className="flex items-center justify-center h-64">
           <div className="text-gray-500">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Add this error display right after the loading check and before the !user check:
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Authentication Error</h1>
+          <p className="text-gray-600 mb-8">{authError}</p>
+          <Button onClick={() => setAuthError(null)}>Try Again</Button>
         </div>
       </div>
     )
