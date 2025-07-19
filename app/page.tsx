@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, ImageIcon } from "lucide-react"
+import { Plus, ImageIcon, ExternalLink } from "lucide-react"
 import { useEffect, useState } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
 import Link from "next/link"
@@ -20,12 +20,14 @@ interface Collection {
     type: string
     content: string
     rank: number
+    description?: string
   }>
 }
 
 export default function Home() {
   const { user, loading } = useAuth()
   const [collections, setCollections] = useState<Collection[]>([])
+  const [exampleCollections, setExampleCollections] = useState<Collection[]>([])
   const [loadingCollections, setLoadingCollections] = useState(true)
   const supabase = getSupabaseClient()
 
@@ -49,6 +51,8 @@ export default function Home() {
   useEffect(() => {
     if (user) {
       fetchCollections()
+    } else {
+      fetchExampleCollections()
     }
   }, [user])
 
@@ -63,7 +67,8 @@ export default function Home() {
           id,
           type,
           content,
-          rank
+          rank,
+          description
         )
       `)
       .eq("user_id", user.id)
@@ -78,6 +83,35 @@ export default function Home() {
         collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
       }))
       setCollections(collectionsWithSortedItems)
+    }
+    setLoadingCollections(false)
+  }
+
+  const fetchExampleCollections = async () => {
+    const { data, error } = await supabase
+      .from("collections")
+      .select(`
+        *,
+        collection_items (
+          id,
+          type,
+          content,
+          rank,
+          description
+        )
+      `)
+      .eq("user_id", "00000000-0000-0000-0000-000000000000")
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching example collections:", error)
+    } else {
+      // Sort items by rank within each collection
+      const collectionsWithSortedItems = data.map((collection) => ({
+        ...collection,
+        collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
+      }))
+      setExampleCollections(collectionsWithSortedItems)
     }
     setLoadingCollections(false)
   }
@@ -111,10 +145,58 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold text-black mb-4">Create Beautiful Collections</h1>
-          <p className="text-xl text-gray-600 mb-8">Organize your images and links into ranked collections</p>
-          <div className="text-gray-500">Sign in to get started</div>
+        <div className="max-w-6xl mx-auto px-4 py-16">
+          <div className="text-center mb-16">
+            <h1 className="text-4xl font-bold text-black mb-4">Create Beautiful Collections</h1>
+            <p className="text-xl text-gray-600 mb-8">Organize your images and links into ranked collections</p>
+            <div className="text-gray-500">Sign in to get started</div>
+          </div>
+
+          {/* Example Collections */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-black mb-6">Example Collections</h2>
+            {loadingCollections ? (
+              <div className="text-center py-8 text-gray-500">Loading examples...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exampleCollections.map((collection) => (
+                  <Card key={collection.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{collection.title}</CardTitle>
+                      {collection.description && <p className="text-sm text-gray-600">{collection.description}</p>}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-3 gap-2">
+                        {collection.collection_items.slice(0, 6).map((item, index) => (
+                          <div key={item.id} className="aspect-square bg-gray-100 rounded overflow-hidden">
+                            {item.type === "image" ? (
+                              <Image
+                                src={item.content || "/placeholder.svg"}
+                                alt={item.description || ""}
+                                width={100}
+                                height={100}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 bg-blue-50">
+                                <ExternalLink className="h-4 w-4" />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {collection.collection_items.length > 6 && (
+                          <div className="aspect-square bg-gray-200 rounded flex items-center justify-center text-sm text-gray-600">
+                            +{collection.collection_items.length - 6}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 text-sm text-gray-500">{collection.collection_items.length} items</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -164,14 +246,14 @@ export default function Home() {
                           {item.type === "image" ? (
                             <Image
                               src={item.content || "/placeholder.svg"}
-                              alt=""
+                              alt={item.description || ""}
                               width={100}
                               height={100}
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
-                              URL
+                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 bg-blue-50">
+                              <ExternalLink className="h-4 w-4" />
                             </div>
                           )}
                         </div>
