@@ -7,7 +7,11 @@ export async function GET(request: NextRequest) {
   const next = requestUrl.searchParams.get("next") ?? "/"
 
   if (code) {
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      auth: {
+        flowType: "pkce",
+      },
+    })
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
@@ -21,6 +25,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // No code parameter, redirect to home
+  // No code parameter, might be implicit flow, redirect to home to let client handle it
   return NextResponse.redirect(new URL("/", requestUrl.origin))
 }
