@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      auth: {
+        flowType: "pkce",
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    })
 
     try {
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
@@ -62,20 +69,17 @@ export async function GET(request: NextRequest) {
         return response
       } else {
         console.error("Auth exchange error:", exchangeError)
-        return NextResponse.redirect(
-          new URL(
-            `/?error=exchange_failed&message=${encodeURIComponent(exchangeError?.message || "Session creation failed")}`,
-            requestUrl.origin,
-          ),
-        )
+        // If PKCE fails, redirect to home and let implicit flow handle it
+        return NextResponse.redirect(new URL("/", requestUrl.origin))
       }
     } catch (err) {
       console.error("Unexpected error during code exchange:", err)
-      return NextResponse.redirect(new URL("/?error=unexpected_error", requestUrl.origin))
+      // If PKCE fails, redirect to home and let implicit flow handle it
+      return NextResponse.redirect(new URL("/", requestUrl.origin))
     }
   }
 
   // No code parameter, redirect to home
   console.log("No code parameter found, redirecting to home")
-  return NextResponse.redirect(new URL("/?error=no_code", requestUrl.origin))
+  return NextResponse.redirect(new URL("/", requestUrl.origin))
 }

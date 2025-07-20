@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Handle URL fragments from implicit flow (fallback)
         if (window.location.hash.includes("access_token")) {
+          console.log("Handling implicit flow tokens from URL hash")
           const hashParams = new URLSearchParams(window.location.hash.substring(1))
           const accessToken = hashParams.get("access_token")
           const refreshToken = hashParams.get("refresh_token")
@@ -116,10 +117,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      // Use implicit flow as fallback since PKCE seems to have issues
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
       })
 
