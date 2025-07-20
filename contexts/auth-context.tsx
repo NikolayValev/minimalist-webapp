@@ -6,9 +6,20 @@ import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { getSupabaseClient } from "@/lib/supabase"
 
+interface UserProfile {
+  id: string
+  username: string
+  avatar_url?: string
+  role: 'user' | 'admin'
+  created_at: string
+  updated_at: string
+}
+
 interface AuthContextType {
   user: User | null
+  profile: UserProfile | null
   loading: boolean
+  isAdmin: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -17,8 +28,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = getSupabaseClient()
+
+  // Helper function to fetch user profile
+  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        console.error('Error fetching user profile:', error)
+        return null
+      }
+
+      return data
+    } catch (error) {
+      console.error('Unexpected error fetching profile:', error)
+      return null
+    }
+  }
 
   useEffect(() => {
     let mounted = true
@@ -39,6 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user && mounted) {
           setUser(session.user)
+          const userProfile = await fetchUserProfile(session.user.id)
+          if (userProfile) {
+            setProfile(userProfile)
+          }
         }
 
         // Handle URL fragments from implicit flow (fallback)
@@ -79,12 +116,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
       console.log("Auth state change:", event, !!session?.user)
 
       if (mounted) {
         setUser(session?.user ?? null)
         setLoading(false)
+        
+        // Fetch profile data when user signs in
+        if (session?.user) {
+          const userProfile = await fetchUserProfile(session.user.id)
+          if (userProfile) {
+            setProfile(userProfile)
+          }
+        } else {
+          setProfile(null)
+        }
       }
 
       // Create profile on sign up
@@ -97,10 +144,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id: session.user.id,
               username: session.user.user_metadata.full_name || session.user.email?.split("@")[0] || "user",
               avatar_url: session.user.user_metadata.avatar_url,
+              role: 'user', // Default role
             })
 
             if (insertError) {
               console.error("Error creating profile:", insertError)
+            } else {
+              // Fetch the newly created profile
+              const newProfile = await fetchUserProfile(session.user.id)
+              if (newProfile) {
+                setProfile(newProfile)
+              }
             }
           }
         } catch (error) {
@@ -140,9 +194,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
+    setProfile(null)
   }
 
-  return <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>{children}</AuthContext.Provider>
+  const isAdmin = profile?.role === 'admin'
+
+  return (
+    <AuthContext.Provider 
+      value={{ user, profile, loading, isAdmin, signInWithGoogle, signOut }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => {
