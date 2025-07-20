@@ -29,12 +29,9 @@ export default function Home() {
   const [collections, setCollections] = useState<Collection[]>([])
   const [exampleCollections, setExampleCollections] = useState<Collection[]>([])
   const [loadingCollections, setLoadingCollections] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
   const supabase = getSupabaseClient()
 
-  // Add this after the existing state declarations
-  const [authError, setAuthError] = useState<string | null>(null)
-
-  // Add this useEffect after the existing useEffect
   useEffect(() => {
     // Check for auth errors in URL
     const urlParams = new URLSearchParams(window.location.search)
@@ -50,70 +47,87 @@ export default function Home() {
 
   useEffect(() => {
     if (user) {
-      fetchCollections()
+      fetchUserCollections()
     } else {
       fetchExampleCollections()
     }
   }, [user])
 
-  const fetchCollections = async () => {
+  const fetchUserCollections = async () => {
     if (!user) return
 
-    const { data, error } = await supabase
-      .from("collections")
-      .select(`
-        *,
-        collection_items (
-          id,
-          type,
-          content,
-          rank,
-          description
-        )
-      `)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
+    setLoadingCollections(true)
+    try {
+      const { data, error } = await supabase
+        .from("collections")
+        .select(`
+          *,
+          collection_items (
+            id,
+            type,
+            content,
+            rank,
+            description
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error("Error fetching collections:", error)
-    } else {
-      // Sort items by rank within each collection
-      const collectionsWithSortedItems = data.map((collection) => ({
-        ...collection,
-        collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
-      }))
-      setCollections(collectionsWithSortedItems)
+      if (error) {
+        console.error("Error fetching user collections:", error)
+      } else {
+        // Sort items by rank within each collection
+        const collectionsWithSortedItems = data.map((collection) => ({
+          ...collection,
+          collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
+        }))
+        setCollections(collectionsWithSortedItems)
+      }
+    } catch (error) {
+      console.error("Unexpected error fetching user collections:", error)
+    } finally {
+      setLoadingCollections(false)
     }
-    setLoadingCollections(false)
   }
 
   const fetchExampleCollections = async () => {
-    const { data, error } = await supabase
-      .from("collections")
-      .select(`
-        *,
-        collection_items (
-          id,
-          type,
-          content,
-          rank,
-          description
-        )
-      `)
-      .eq("user_id", "00000000-0000-0000-0000-000000000000")
-      .order("created_at", { ascending: false })
+    setLoadingCollections(true)
+    try {
+      console.log("Fetching example collections...")
 
-    if (error) {
-      console.error("Error fetching example collections:", error)
-    } else {
-      // Sort items by rank within each collection
-      const collectionsWithSortedItems = data.map((collection) => ({
-        ...collection,
-        collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
-      }))
-      setExampleCollections(collectionsWithSortedItems)
+      const { data, error } = await supabase
+        .from("collections")
+        .select(`
+          *,
+          collection_items (
+            id,
+            type,
+            content,
+            rank,
+            description
+          )
+        `)
+        .eq("user_id", "00000000-0000-0000-0000-000000000000")
+        .order("created_at", { ascending: false })
+
+      console.log("Example collections query result:", { data, error })
+
+      if (error) {
+        console.error("Error fetching example collections:", error)
+      } else {
+        // Sort items by rank within each collection
+        const collectionsWithSortedItems = data.map((collection) => ({
+          ...collection,
+          collection_items: collection.collection_items.sort((a, b) => a.rank - b.rank),
+        }))
+        console.log("Processed example collections:", collectionsWithSortedItems)
+        setExampleCollections(collectionsWithSortedItems)
+      }
+    } catch (error) {
+      console.error("Unexpected error fetching example collections:", error)
+    } finally {
+      setLoadingCollections(false)
     }
-    setLoadingCollections(false)
   }
 
   if (loading) {
@@ -127,7 +141,6 @@ export default function Home() {
     )
   }
 
-  // Add this error display right after the loading check and before the !user check:
   if (authError) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -157,6 +170,11 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-black mb-6">Example Collections</h2>
             {loadingCollections ? (
               <div className="text-center py-8 text-gray-500">Loading examples...</div>
+            ) : exampleCollections.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No example collections found.</p>
+                <p className="text-sm text-gray-400">Make sure to run the seed script to add example data.</p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {exampleCollections.map((collection) => (
@@ -167,7 +185,7 @@ export default function Home() {
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-3 gap-2">
-                        {collection.collection_items.slice(0, 6).map((item, index) => (
+                        {collection.collection_items.slice(0, 6).map((item) => (
                           <div key={item.id} className="aspect-square bg-gray-100 rounded overflow-hidden">
                             {item.type === "image" ? (
                               <Image
@@ -176,6 +194,10 @@ export default function Home() {
                                 width={100}
                                 height={100}
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement
+                                  target.src = "/placeholder.svg?height=100&width=100"
+                                }}
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 bg-blue-50">
@@ -241,7 +263,7 @@ export default function Home() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-3 gap-2">
-                      {collection.collection_items.slice(0, 6).map((item, index) => (
+                      {collection.collection_items.slice(0, 6).map((item) => (
                         <div key={item.id} className="aspect-square bg-gray-100 rounded overflow-hidden">
                           {item.type === "image" ? (
                             <Image
@@ -250,6 +272,10 @@ export default function Home() {
                               width={100}
                               height={100}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.src = "/placeholder.svg?height=100&width=100"
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 bg-blue-50">
